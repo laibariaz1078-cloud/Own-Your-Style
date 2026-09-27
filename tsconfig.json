@@ -1,0 +1,37 @@
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": false,
+    "noEmit": true,
+    "incremental": true,
+    "module": "esnext",
+    "esModuleInterop": true,
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ]
+  },
+  "include": [
+    "next-env.d.ts",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts",
+    "**/*.mts",
+    "**/*.ts",
+    "**/*.tsx"
+, "src/app/account/AccountSidebar.js", "src/components/AuthLayout.js", "src/components/BillingForm.js", "src/components/Breadcrumb.js", "src/components/Button.js", "src/components/CartTable.js", "src/components/CartTotal.js", "src/components/CategorySidebar.js", "src/components/CategoryTabs.js", "src/components/ContactSection.js", "src/components/CountdownTimer.js", "src/components/FeaturesStrip.js", "src/components/Footer.js", "src/components/HeroBanner.js", "src/components/MusicPromoBanner.js", "src/components/Navbar.js", "src/components/NewArrivalGrid.js", "src/components/OrderSummary.js", "src/components/ProductCard.js", "src/components/ProductGallery.js", "src/components/ProductInfo.js", "src/components/ProfileForm.js", "src/components/SectionHeader.js", "src/components/StatsStrip.js", "src/components/StoryHero.js", "src/components/TeamGrid.js", "src/components/TopBar.js", "src/components/WishlistGrid.js", "src/lib/types.js", "src/tailwind.config.js", "src/app/about/page.js", "src/app/account/page.js", "src/app/cart/page.js", "src/app/checkout/page.js", "src/app/contact/page.js", "src/app/login/page.js", "src/app/product/[slug]/page.js", "src/app/signup/page.js", "src/app/wishlist/page.js", "src/app/home-data.js", "src/app/not-found.jsx", "src/app/page.jsx"  ],
+  "exclude": [
+    "node_modules"
+  ]
+}
