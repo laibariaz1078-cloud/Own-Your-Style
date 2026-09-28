@@ -52,8 +52,8 @@ export default function CategorySidebar({ selectedCategory = "all", onSelectCate
   }, []);
 
   return (
-    <nav className="hidden w-49 shrink-0  border-r border-gray-300 border-line pr-6 lg:block">
-      <ul className="flex flex-col gap-3 py-2">
+<nav className="hidden h-full min-h-0 w-49 shrink-0 self-stretch border-r border-gray-300 border-line pr-6 lg:flex lg:flex-col">
+  <ul className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto py-2 pr-2 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
         <li>
           <button
             type="button"

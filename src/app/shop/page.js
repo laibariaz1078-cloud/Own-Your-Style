@@ -42,8 +42,9 @@ const fallbackCatalog = Object.entries(fallbackProductsByCategory)
     ...product,
     category,
     addToCartVisible: true,
-    collection: "explore",
   })));
+
+const PAGE_SIZE = 12;
 
 const normalizeCategoryMatchValue = (value) =>
   String(value || "")
@@ -78,12 +79,24 @@ const matchesFilters = (product, selectedCategory, searchTerm) => {
   return categoryMatches && (!normalizedSearch || product.name.toLowerCase().includes(normalizedSearch));
 };
 
+function SectionBadge({ label }) {
+  return (
+    <div className="flex items-center gap-2 sm:gap-4">
+      <div className="h-6 w-3 rounded bg-[#DB4444] sm:h-8 sm:w-3.5 md:h-10 md:w-4" />
+      <span className="text-sm font-semibold text-[#DB4444] sm:text-base">
+        {label}
+      </span>
+    </div>
+  );
+}
+
 export default function ShopPage() {
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   useEffect(() => {
     const categoryFromUrl = new URLSearchParams(window.location.search).get("category");
@@ -100,18 +113,12 @@ export default function ShopPage() {
     return () => clearTimeout(categorySync);
   }, []);
 
-  const filteredFlashSale = useMemo(
-    () => products.filter((product) => product.collection === "flashSale" && matchesFilters(product, selectedCategory, searchTerm)),
-    [products, selectedCategory, searchTerm]
-  );
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [selectedCategory, searchTerm]);
 
-  const filteredBestSelling = useMemo(
-    () => products.filter((product) => product.collection === "bestSelling" && matchesFilters(product, selectedCategory, searchTerm)),
-    [products, selectedCategory, searchTerm]
-  );
-
-  const filteredExplore = useMemo(
-    () => products.filter((product) => product.collection === "explore" && matchesFilters(product, selectedCategory, searchTerm)),
+  const filteredProducts = useMemo(
+    () => products.filter((product) => matchesFilters(product, selectedCategory, searchTerm)),
     [products, selectedCategory, searchTerm]
   );
 
@@ -120,10 +127,10 @@ export default function ShopPage() {
     [selectedCategory, searchTerm]
   );
 
-  const displayedExplore = filteredExplore.length > 0 ? filteredExplore : filteredFallback;
-
-  const totalCount = filteredFlashSale.length + filteredBestSelling.length + displayedExplore.length;
-  const hasAnyProducts = totalCount > 0;
+  const allProducts = filteredProducts.length > 0 ? filteredProducts : filteredFallback;
+  const totalCount = allProducts.length;
+  const visibleProducts = allProducts.slice(0, visibleCount);
+  const hasMore = visibleCount < totalCount;
 
   const gridColsClass = sidebarOpen
     ? "grid-cols-2 sm:grid-cols-2 lg:grid-cols-3"
@@ -137,18 +144,17 @@ export default function ShopPage() {
       <Breadcrumb items={[{ label: "Home", href: "/" }, { label: "Shop" }]} />
 
       <main className="page-shell flex flex-col gap-14 pb-20">
-        {/* Intro strip */}
-        <div className="flex flex-col gap-1 border-b border-black/10 pb-6 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-1 border-b border-black/10 pb-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen((previous) => !previous)}
-              className="flex h-9 w-9 items-center justify-center rounded border border-black/10 text-gray-600 hover:border-black/30 hover:text-black"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded border border-black/10 text-gray-600 hover:border-black/30 hover:text-black"
               aria-label={sidebarOpen ? "Hide categories" : "Show categories"}
             >
               {sidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
             </button>
             <div>
-              <h1 className="text-3xl font-semibold text-black">Shop</h1>
+              <h1 className="text-3xl font-semibold leading-tight text-black">Shop</h1>
               <p className="mt-1 text-sm text-gray-500">
                 {loading
                   ? "Loading products..."
@@ -176,16 +182,16 @@ export default function ShopPage() {
             />
           )}
 
-          <div className="flex-1 space-y-16">
+          <div className="min-w-0 flex-1 space-y-10">
             {loading && (
               <div className={`grid gap-6 ${gridColsClass}`}>
                 {Array.from({ length: 8 }).map((_, index) => (
-                  <div key={index} className="aspect-3/4 animate-pulse rounded bg-gray-100" />
+                  <div key={index} className="aspect-[3/4] animate-pulse rounded bg-gray-100" />
                 ))}
               </div>
             )}
 
-            {!loading && !hasAnyProducts && (
+            {!loading && totalCount === 0 && (
               <div className="flex flex-col items-center gap-2 rounded border border-dashed border-gray-200 bg-gray-50 px-6 py-16 text-center">
                 <p className="text-base font-medium text-black">No products found</p>
                 <p className="text-sm text-gray-500">
@@ -194,36 +200,28 @@ export default function ShopPage() {
               </div>
             )}
 
-            {!loading && filteredFlashSale.length > 0 && (
+            {!loading && totalCount > 0 && (
               <section className="flex flex-col gap-8">
-                <SectionHeader eyebrow="Featured" title="Flash Sale" showViewAll />
+                <div className="flex flex-col gap-4">
+                  <SectionBadge label="Browse" />
+                  <SectionHeader title="All Products" />
+                </div>
                 <div className={`grid gap-x-6 gap-y-10 ${gridColsClass}`}>
-                  {filteredFlashSale.map((product) => (
+                  {visibleProducts.map((product) => (
                     <ProductCard key={product.id} product={product} />
                   ))}
                 </div>
-              </section>
-            )}
 
-            {!loading && filteredBestSelling.length > 0 && (
-              <section className="flex flex-col gap-8">
-                <SectionHeader eyebrow="Popular" title="Best Selling" showViewAll />
-                <div className={`grid gap-x-6 gap-y-10 ${gridColsClass}`}>
-                  {filteredBestSelling.map((product) => (
-                    <ProductCard key={product.id} product={product} />
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {!loading && displayedExplore.length > 0 && (
-              <section className="flex flex-col gap-8">
-                <SectionHeader eyebrow="Browse" title={selectedCategory === "all" ? "All Products" : "Related Products"} showViewAll />
-                <div className={`grid gap-x-6 gap-y-10 ${gridColsClass}`}>
-                  {displayedExplore.map((product) => (
-                    <ProductCard key={product.id} product={product} />
-                  ))}
-                </div>
+                {hasMore && (
+                  <div className="flex justify-center pt-6">
+                    <button
+                      onClick={() => setVisibleCount((previous) => previous + PAGE_SIZE)}
+                      className="rounded bg-[#DB4444] px-12 py-3 text-sm font-medium text-white transition hover:bg-[#c93b3b]"
+                    >
+                      Load More
+                    </button>
+                  </div>
+                )}
               </section>
             )}
           </div>

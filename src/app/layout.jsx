@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata = {
-  title: "Shop Your Way",
-  description: "Shop Your Way is a modern e-commerce platform that allows you to create and manage your online store with ease.",
+  title: "Own Your Lifestyle",
+  description: "Own Your Lifestyle is a modern e-commerce platform that allows you to create and manage your online store with ease.",
 };
 
 export default function RootLayout({ children }) {

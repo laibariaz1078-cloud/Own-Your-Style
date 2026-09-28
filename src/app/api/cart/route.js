@@ -42,15 +42,15 @@ export async function POST(request) {
     if (user && !isBuyerRole(user.role)) {
       return NextResponse.json({ success: false, message: `Your account role is ${user.role}. Only buyers can add products to cart.` }, { status: 403 });
     }
-    const cart = await addToCart({
+    const { cart, availableStock } = await addToCart({
       userId: user?._id,
       sessionId,
       ...data,
     });
 
-    return setGuestCartCookie(NextResponse.json({ success: true, cart }, { status: 201 }), user, sessionId);
+    return setGuestCartCookie(NextResponse.json({ success: true, cart, availableStock }, { status: 201 }), user, sessionId);
   } catch (error) {
-    return NextResponse.json({ success: false, message: error.message || "Unable to add item to cart." }, { status: 200 });
+    return NextResponse.json({ success: false, message: error.message || "Unable to add item to cart." }, { status: error.statusCode || 400 });
   }
 }
 
@@ -64,7 +64,7 @@ export async function PUT(request) {
     const cart = await updateCartItem({ userId: user?._id, sessionId, ...data });
     return setGuestCartCookie(NextResponse.json({ success: true, cart }), user, sessionId);
   } catch (error) {
-    return NextResponse.json({ success: false, message: error.message || "Unable to update cart item." }, { status: 200 });
+    return NextResponse.json({ success: false, message: error.message || "Unable to update cart item." }, { status: error.statusCode || 400 });
   }
 }
 

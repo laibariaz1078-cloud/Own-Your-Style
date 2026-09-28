@@ -185,7 +185,7 @@ export default function HomePage() {
       <Navbar searchValue={searchTerm} onSearchChange={setSearchTerm} />
 
       <main className="page-shell flex flex-col gap-6 py-6 overflow-x-hidden sm:gap-8">
-        <section className="flex flex-col gap-6 md:flex-row md:gap-8">
+        <section className="flex flex-col gap-6 md:flex-row md:gap-8 lg:h-[364px] lg:items-stretch">
           <CategorySidebar
             selectedCategory={selectedCategory}
             onSelectCategory={setSelectedCategory}

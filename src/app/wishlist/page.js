@@ -6,18 +6,22 @@ import Footer from "../../components/Footer";
 import WishlistGrid from "../../components/WishlistGrid";
 import ProductCard from "../../components/ProductCard";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAppContext } from "../../context/AppContext";
 import { flashSaleProducts, bestSellingProducts, exploreProducts } from "../home-data";
 import { getBuyerOnlyMessage, isBuyerRole } from "../../lib/permissions";
 import { showModal } from "../../lib/modal";
+import { LoaderCircle, ShoppingBag } from "lucide-react";
+import { addProductToCart as addCartItem, getProductStock } from "../../lib/cartHelpers";
 
 export default function WishlistPage() {
   const [wishlistItems, setWishlistItems] = useState([]);
   const [justForYouProducts, setJustForYouProducts] = useState([]);
   const [toastMessage, setToastMessage] = useState("");
+  const [toastType, setToastType] = useState("success");
   const [pendingAddToCartId, setPendingAddToCartId] = useState(null);
   const [addedProductIds, setAddedProductIds] = useState([]);
+  const [isAddingAll, setIsAddingAll] = useState(false);
   const router = useRouter();
   const { refreshCartCount, refreshWishlistItems, user } = useAppContext();
   const isRestrictedBuyerRole = !!user && !isBuyerRole(user.role);
@@ -35,7 +39,7 @@ export default function WishlistPage() {
     }
   };
 
-  const loadWishlistItems = async () => {
+  const loadWishlistItems = useCallback(async () => {
     try {
       if (!user) {
         const ids = getGuestWishlistIds();
@@ -69,7 +73,7 @@ export default function WishlistPage() {
     } catch (error) {
       setWishlistItems([]);
     }
-  };
+  }, [user]);
 
   const handleRemoveWishlistItem = async (productId) => {
     try {
@@ -104,6 +108,13 @@ export default function WishlistPage() {
     const productId = product?.id || product?._id || product?.productId;
     if (!productId) return;
 
+    if (getProductStock(product) === 0) {
+      setToastMessage("This item is out of stock");
+      setToastType("error");
+      window.setTimeout(() => setToastMessage(""), 2400);
+      return;
+    }
+
     if (user && !isBuyerRole(user.role)) {
       await showModal({
         title: "Buyer access required",
@@ -117,42 +128,9 @@ export default function WishlistPage() {
     setAddedProductIds((prev) => (prev.includes(normalizedProductId) ? prev : [...prev, normalizedProductId]));
 
     try {
-      if (!user) {
-        const guestItems = JSON.parse(localStorage.getItem("guest_cart_items") || "[]");
-        const existingItem = guestItems.find((item) => String(item.productId) === normalizedProductId);
-        const nextItems = existingItem
-          ? guestItems.map((item) => String(item.productId) === normalizedProductId ? { ...item, quantity: Number(item.quantity || 0) + 1 } : item)
-          : [...guestItems, { productId: normalizedProductId, quantity: 1 }];
-
-        localStorage.setItem("guest_cart_items", JSON.stringify(nextItems));
-        await refreshCartCount();
-        setToastMessage("Added to cart");
-        window.dispatchEvent(new CustomEvent("cart:updated"));
-        window.setTimeout(() => {
-          setToastMessage("");
-          setAddedProductIds((prev) => prev.filter((id) => String(id) !== normalizedProductId));
-        }, 1700);
-        return;
-      }
-
-      const response = await fetch("/api/cart", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          productId,
-          quantity: 1,
-          unitPrice: Number(product.basePrice ?? product.price ?? 0),
-        }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || "Unable to add to cart");
-
-      await refreshWishlistItems();
-      setToastMessage("Added to cart");
-      window.dispatchEvent(new CustomEvent("cart:updated"));
-      window.dispatchEvent(new CustomEvent("wishlist:updated"));
+      const result = await addCartItem({ product, user, refreshCartCount });
+      setToastMessage(result.message);
+      setToastType(result.isLowStock ? "warning" : "success");
 
       window.setTimeout(() => {
         setToastMessage("");
@@ -160,11 +138,49 @@ export default function WishlistPage() {
       }, 1700);
     } catch (error) {
       console.error("Add wishlist item to cart failed", error);
+      setToastMessage(error.message || "Unable to add to cart");
+      setToastType("error");
       setAddedProductIds((prev) => prev.filter((id) => String(id) !== normalizedProductId));
+      window.setTimeout(() => setToastMessage(""), 2400);
     } finally {
       window.setTimeout(() => {
         setPendingAddToCartId((currentId) => (String(currentId) === normalizedProductId ? null : currentId));
       }, 300);
+    }
+  };
+
+  const handleAddAllToCart = async () => {
+    if (isAddingAll || !wishlistItems.length || isRestrictedBuyerRole) return;
+
+    setIsAddingAll(true);
+    let addedCount = 0;
+    let failedCount = wishlistItems.filter((product) => getProductStock(product) === 0).length;
+    let lowStockAdded = false;
+
+    try {
+      for (const product of wishlistItems) {
+        try {
+          const result = await addCartItem({ product, user, refreshCartCount });
+          lowStockAdded = lowStockAdded || result.isLowStock;
+          addedCount += 1;
+        } catch (error) {
+          if (getProductStock(product) !== 0) failedCount += 1;
+        }
+      }
+
+      const message = addedCount
+        ? `${addedCount} ${addedCount === 1 ? "item" : "items"} added to your bag${failedCount ? `; ${failedCount} could not be added` : ""}`
+        : "No available items could be added";
+      setToastMessage(message);
+      setToastType(addedCount ? lowStockAdded ? "warning" : "success" : "error");
+      window.setTimeout(() => setToastMessage(""), 2400);
+    } catch (error) {
+      console.error("Add all wishlist items to cart failed", error);
+      setToastMessage("Unable to add wishlist items to your bag");
+      setToastType("error");
+      window.setTimeout(() => setToastMessage(""), 2400);
+    } finally {
+      setIsAddingAll(false);
     }
   };
 
@@ -188,26 +204,33 @@ export default function WishlistPage() {
       window.clearTimeout(timer);
       window.removeEventListener("wishlist:updated", syncWishlist);
     };
-  }, []);
+  }, [loadWishlistItems]);
 
   return (
     <div className="min-h-screen bg-white font-sans text-black">
       <TopBar />
       <Navbar />
 
-      <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-5">
+      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10 lg:px-5">
         {toastMessage && (
-          <div className="fixed bottom-6 right-6 z-50 rounded-lg bg-[#DB4444] px-4 py-2 text-sm font-medium text-white shadow-lg">
+          <div role="status" className={`fixed bottom-5 left-4 right-4 z-50 mx-auto max-w-sm rounded-lg px-4 py-3 text-center text-sm font-medium text-white shadow-xl sm:left-auto sm:right-6 sm:text-left ${toastType === "warning" ? "bg-amber-500" : toastType === "error" ? "bg-red-600" : "bg-neutral-900"}`}>
             {toastMessage}
           </div>
         )}
 
-        <div className="mb-10 flex items-center justify-between">
-          <h1 className="text-xl font-normal">
-            Wishlist ({wishlistItems.length})
-          </h1>
-          <button className="rounded-sm border border-black/30 px-10 py-3 text-base font-medium transition-colors hover:bg-black hover:text-white">
-            Move All To Bag
+        <div className="mb-7 flex flex-col gap-4 border-b border-neutral-200 pb-6 sm:mb-8 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-medium text-neutral-500">Saved for later</p>
+            <h1 className="mt-1 text-2xl font-bold tracking-tight text-neutral-900 sm:text-3xl">My Wishlist <span className="text-lg font-medium text-neutral-400">({wishlistItems.length})</span></h1>
+          </div>
+          <button
+            type="button"
+            onClick={handleAddAllToCart}
+            disabled={isAddingAll || !wishlistItems.length || isRestrictedBuyerRole}
+            className="inline-flex min-h-12 w-full items-center justify-center gap-2.5 rounded-lg bg-[#DB4444] px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#c93636] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#DB4444] focus-visible:ring-offset-2 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-neutral-300 disabled:text-neutral-500 disabled:shadow-none sm:w-auto sm:min-w-48"
+          >
+            {isAddingAll ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ShoppingBag className="h-4 w-4" />}
+            {isAddingAll ? "Adding items..." : "Add all to bag"}
           </button>
         </div>
 
@@ -220,17 +243,17 @@ export default function WishlistPage() {
           isRestrictedBuyerRole={isRestrictedBuyerRole}
         />
 
-        <div className="mb-10 mt-20 flex items-center justify-between">
+        <div className="mb-6 mt-14 flex items-center justify-between border-t border-neutral-200 pt-8 sm:mb-8 sm:mt-20">
           <div className="flex items-center gap-4">
-            <span className="h-10 w-5 rounded-sm bg-[#DB4444]" />
-            <h2 className="text-xl font-normal">Just For You</h2>
+            <span className="h-8 w-1.5 rounded-full bg-[#DB4444]" />
+            <h2 className="text-xl font-semibold text-neutral-900">Just for you</h2>
           </div>
-          <button className="rounded-sm border border-black/30 px-10 py-3 text-base font-medium transition-colors hover:bg-black hover:text-white">
+          <button type="button" onClick={() => router.push("/shop")} className="rounded-lg border border-neutral-300 px-4 py-2 text-sm font-semibold text-neutral-700 transition hover:border-neutral-900 hover:bg-neutral-900 hover:text-white">
             See All
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {justForYouProducts.map((product) => (
             <ProductCard
               key={product._id || product.id}

@@ -49,7 +49,7 @@ export default function Footer() {
         <div className="mx-5 md:mx-0 grid grid-cols-1 gap-10 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
           
           {/* Column 1: Exclusive Subscribe */}
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-4">
             <h3 className="text-2xl font-bold tracking-wide">Exclusive</h3>
             <h4 className="text-xl font-medium">Subscribe</h4>
             <p className="text-base text-[#FAFAFA]">Get 10% off your first order</p>
@@ -76,9 +76,9 @@ export default function Footer() {
           </div>
 
           {/* Column 2: Support */}
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-4">
             <h4 className="text-xl font-medium">Support</h4>
-            <div className="flex flex-col gap-1 text-base text-[#FAFAFA]">
+            <div className="flex flex-col gap-3  text-base text-[#FAFAFA]">
               {supportLinks.map((line) => (
                 <p key={line} className="leading-relaxed">
                   {line}
@@ -100,9 +100,9 @@ export default function Footer() {
           </div>
 
           {/* Column 3: Account */}
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-4">
             <h4 className="text-xl font-medium">Account</h4>
-            <div className="flex flex-col gap-1 text-base text-[#FAFAFA]">
+            <div className="flex flex-col gap-3  text-base text-[#FAFAFA]">
               {accountLinks.map((link) => (
                 <Link
                   key={link.label}
@@ -116,9 +116,9 @@ export default function Footer() {
           </div>
 
           {/* Column 4: Quick Link */}
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-4">
             <h4 className="text-xl font-medium">Quick Link</h4>
-            <div className="flex flex-col gap-1 text-base text-[#FAFAFA]">
+            <div className="flex flex-col gap-3  text-base text-[#FAFAFA]">
               {quickLinks.map((link) => (
                 <Link
                   key={link.label}
@@ -132,7 +132,7 @@ export default function Footer() {
           </div>
 
           {/* Column 5: Download App */}
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-4">
             <h4 className="text-xl font-medium">Download App</h4>
             <p className="text-xs font-medium text-gray-400">
               Save $3 with App New User Only

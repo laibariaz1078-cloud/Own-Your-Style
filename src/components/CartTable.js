@@ -4,17 +4,36 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { X, ChevronUp, ChevronDown } from "lucide-react";
+import { clampCartQuantity } from "../lib/cartHelpers";
 
 export default function CartTable({ items = [], onRemoveItem, onUpdateQuantity }) {
   const [quantities, setQuantities] = useState(Object.fromEntries(items.map((item) => [item.id, item.quantity])));
+  const [pendingIds, setPendingIds] = useState([]);
 
-  const updateQuantity = (id, delta) => {
-    setQuantities((prev) => {
-      const current = prev[id] || 1;
-      const updated = Math.max(1, current + delta);
-      onUpdateQuantity?.(id, updated);
-      return { ...prev, [id]: updated };
-    });
+  const updateQuantity = async (item, value) => {
+    const nextQuantity = clampCartQuantity(value, item.stockLimit);
+    if (nextQuantity === item.quantity) {
+      setQuantities((previous) => {
+        const nextQuantities = { ...previous };
+        delete nextQuantities[item.id];
+        return nextQuantities;
+      });
+      return;
+    }
+
+    setPendingIds((previous) => [...previous, item.id]);
+    try {
+      await onUpdateQuantity?.(item.id, nextQuantity);
+    } catch (error) {
+      setQuantities((previous) => ({ ...previous, [item.id]: item.quantity }));
+    } finally {
+      setQuantities((previous) => {
+        const nextQuantities = { ...previous };
+        delete nextQuantities[item.id];
+        return nextQuantities;
+      });
+      setPendingIds((previous) => previous.filter((pendingId) => pendingId !== item.id));
+    }
   };
 
   return (
@@ -27,8 +46,9 @@ export default function CartTable({ items = [], onRemoveItem, onUpdateQuantity }
       </div>
 
       {items.map((item) => {
-        const currentQty = quantities[item.id] ?? item.quantity;
-        const formattedQty = currentQty < 10 ? `0${currentQty}` : currentQty;
+        const currentQty = Number(quantities[item.id] ?? item.quantity) || 1;
+        const maximum = Math.max(item.quantity, Number(item.stockLimit) || item.quantity);
+        const isPending = pendingIds.includes(item.id);
 
         return (
           <div
@@ -60,30 +80,52 @@ export default function CartTable({ items = [], onRemoveItem, onUpdateQuantity }
               ${item.price}
             </span>
 
-            <div className="flex justify-center">
+            <div className="flex flex-col items-center justify-center">
               <div className="flex items-center justify-between rounded border border-black/40 px-3 py-1.5 w-20">
-                <span className="text-base font-normal text-black select-none">
-                  {formattedQty}
-                </span>
+                <input
+                  type="number"
+                  min="1"
+                  max={maximum}
+                  value={quantities[item.id] ?? item.quantity}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setQuantities((previous) => ({
+                      ...previous,
+                      [item.id]: value === "" ? "" : clampCartQuantity(value, maximum),
+                    }));
+                  }}
+                  onBlur={(event) => updateQuantity(item, event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") event.currentTarget.blur();
+                  }}
+                  disabled={isPending}
+                  aria-label={`${item.name} quantity`}
+                  className="w-9 bg-transparent text-center text-base font-normal text-black outline-none disabled:text-neutral-400"
+                />
 
                 <div className="flex flex-col gap-0.5">
                   <button
                     type="button"
-                    onClick={() => updateQuantity(item.id, 1)}
-                    className="text-black/60 hover:text-black transition-colors leading-none"
+                    onClick={() => updateQuantity(item, currentQty + 1)}
+                    disabled={isPending || currentQty >= maximum}
+                    aria-label={`Increase ${item.name} quantity`}
+                    className="text-black/60 transition-colors leading-none hover:text-black disabled:cursor-not-allowed disabled:text-black/20"
                   >
                     <ChevronUp className="h-3.5 w-3.5" />
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => updateQuantity(item.id, -1)}
-                    className="text-black/60 hover:text-black transition-colors leading-none"
+                    onClick={() => updateQuantity(item, currentQty - 1)}
+                    disabled={isPending || currentQty <= 1}
+                    aria-label={`Decrease ${item.name} quantity`}
+                    className="text-black/60 transition-colors leading-none hover:text-black disabled:cursor-not-allowed disabled:text-black/20"
                   >
                     <ChevronDown className="h-3.5 w-3.5" />
                   </button>
                 </div>
               </div>
+              {currentQty >= maximum && <p className="mt-1 text-center text-xs text-amber-700">Only {maximum} available.</p>}
             </div>
 
             <span className="text-right text-base font-normal text-black">

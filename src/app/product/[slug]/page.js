@@ -42,6 +42,7 @@ export default async function ProductDetailsPage({ params }) {
             rating={product.rating}
             reviewCount={product.reviewCount}
             inStock={product.variants?.some((variant) => variant.inventory?.quantity > 0)}
+            stock={product.variants?.[0]?.inventory?.quantity ?? 0}
             price={product.basePrice}
             description={product.description}
             colors={product.colors}

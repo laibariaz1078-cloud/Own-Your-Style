@@ -13,6 +13,18 @@ export async function getOrderById(orderId) {
   return Order.findById(orderId).lean();
 }
 
+export function validateCartStock(cart) {
+  for (const item of cart?.items || []) {
+    const product = item.productId;
+    const stock = Number(product?.variants?.[0]?.inventory?.quantity);
+    if (!product || product.status !== "active" || !Number.isFinite(stock) || stock < 0) {
+      const error = new Error(`Stock for ${product?.name || "an item in your cart"} changed. Please review your cart and try again.`);
+      error.statusCode = 409;
+      throw error;
+    }
+  }
+}
+
 export async function createOrder({ userId, customerName, items = [], shippingAddress, billingAddress, payment, totals, pricing, status = "Processing", notes }) {
   await connectToDatabase();
 
@@ -42,6 +54,7 @@ export async function createOrderFromCart({ userId, customerName, shippingAddres
   await connectToDatabase();
   const cart = await Cart.findOne({ userId }).populate("items.productId");
   if (!cart?.items?.length) throw new Error("Your cart is empty.");
+  validateCartStock(cart);
 
   const items = cart.items.map((item) => {
     const product = item.productId;

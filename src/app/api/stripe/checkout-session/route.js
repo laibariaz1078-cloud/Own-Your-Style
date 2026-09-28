@@ -3,6 +3,7 @@ import Stripe from "stripe";
 import { getCurrentUser } from "../../../../controllers/authController";
 import { connectToDatabase } from "../../../../lib/mongodb";
 import { getCart } from "../../../../controllers/cartController";
+import { validateCartStock } from "../../../../controllers/orderController";
 import { cookies } from "next/headers";
 
 export const runtime = "nodejs";
@@ -27,6 +28,7 @@ export async function POST(request) {
     if (!cart?.items?.length) {
       return NextResponse.json({ success: false, message: "Your cart is empty." }, { status: 400 });
     }
+    validateCartStock(cart);
 
     const lineItems = cart.items.map((item) => {
       const product = item.productId;

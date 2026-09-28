@@ -27,21 +27,21 @@ export async function getCart({ userId, sessionId }) {
 
   if (userId) {
     const userCart = await Cart.findOne({ userId });
-    if (userCart) return userCart.populate("items.productId", "name basePrice images sellerId");
+    if (userCart) return userCart.populate("items.productId", "name basePrice images sellerId variants status");
     if (sessionId) {
       const guestCart = await Cart.findOne({ sessionId });
       if (guestCart?.items?.length) {
         guestCart.userId = userId;
         guestCart.sessionId = undefined;
         await guestCart.save();
-        return guestCart.populate("items.productId", "name basePrice images sellerId");
+        return guestCart.populate("items.productId", "name basePrice images sellerId variants status");
       }
     }
     return null;
   }
 
   if (!sessionId) return null;
-  return Cart.findOne({ sessionId }).populate("items.productId", "name basePrice images sellerId").lean();
+  return Cart.findOne({ sessionId }).populate("items.productId", "name basePrice images sellerId variants status").lean();
 }
 
 export async function addToCart({ userId, sessionId, productId, quantity = 1, unitPrice, currency = "USD" }) {
@@ -61,14 +61,16 @@ export async function addToCart({ userId, sessionId, productId, quantity = 1, un
   }
   const existingCart = await Cart.findOne(filter);
   const existingItem = existingCart?.items.find((item) => item.productId?._id?.toString() === productId.toString() || item.productId?.toString() === productId.toString());
-  await reserveStock(productId, requestedQuantity);
+  const reservedProduct = await reserveStock(productId, requestedQuantity);
+  const availableStock = Number(reservedProduct.variants?.[0]?.inventory?.quantity) || 0;
 
   if (existingItem) {
-    return Cart.findOneAndUpdate(
+    const cart = await Cart.findOneAndUpdate(
       { ...filter, "items.productId": productId },
       { $inc: { "items.$.quantity": requestedQuantity }, $set: { "items.$.unitPrice": product.basePrice } },
       { new: true }
     );
+    return { cart, availableStock };
   }
 
   const update = {
@@ -84,7 +86,8 @@ export async function addToCart({ userId, sessionId, productId, quantity = 1, un
     },
   };
 
-  return Cart.findOneAndUpdate(filter, update, { upsert: true, new: true, setDefaultsOnInsert: true });
+  const cart = await Cart.findOneAndUpdate(filter, update, { upsert: true, new: true, setDefaultsOnInsert: true });
+  return { cart, availableStock };
 }
 
 export async function updateCartItem({ userId, sessionId, productId, quantity }) {
@@ -106,7 +109,7 @@ export async function updateCartItem({ userId, sessionId, productId, quantity })
     { new: true }
   );
 
-  return updatedCart.populate("items.productId", "name basePrice images sellerId");
+  return updatedCart.populate("items.productId", "name basePrice images sellerId variants status");
 }
 
 export async function removeFromCart({ userId, sessionId, productId }) {
@@ -123,5 +126,5 @@ export async function removeFromCart({ userId, sessionId, productId }) {
     { new: true }
   );
 
-  return updatedCart?.populate("items.productId", "name basePrice images sellerId");
+  return updatedCart?.populate("items.productId", "name basePrice images sellerId variants status");
 }

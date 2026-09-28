@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { showModal } from "../lib/modal";
 import { useAppContext } from "../context/AppContext";
 import { getBuyerOnlyMessage, isBuyerRole } from "../lib/permissions";
+import { addProductToCart } from "../lib/cartHelpers";
 
 export default function ProductInfo({
   name = "Havic HV G-92 Gamepad",
@@ -18,13 +19,14 @@ export default function ProductInfo({
   sizes = ["XS", "S", "M", "L", "XL"],
   vendor,
   productId,
+  stock,
 }) {
   const router = useRouter();
-  const { wishlistIds, toggleWishlistItem, user } = useAppContext();
+  const { wishlistIds, toggleWishlistItem, refreshCartCount, user } = useAppContext();
   const isRestrictedBuyerRole = !!user && !isBuyerRole(user.role);
   const [selectedColor, setSelectedColor] = useState(() => colors?.[0] ?? null);
   const [selectedSize, setSelectedSize] = useState("M");
-  const [quantity, setQuantity] = useState(2);
+  const [quantity, setQuantity] = useState(1);
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [buying, setBuying] = useState(false);
   const [addingToCart, setAddingToCart] = useState(false);
@@ -33,11 +35,8 @@ export default function ProductInfo({
   const contextWishlisted = productId ? wishlistIds.includes(String(productId)) : false;
   const isWishlistedState = contextWishlisted || isWishlisted;
   const activeColor = colors?.includes(selectedColor) ? selectedColor : colors?.[0] ?? null;
-  const selectedVariantText = [
-    activeColor ? `Color: ${activeColor}` : null,
-    selectedSize ? `Size: ${selectedSize}` : null,
-  ].filter(Boolean).join(" • ");
-
+  const availableStock = stock == null ? (inStock ? 1 : 0) : Math.max(0, Number(stock) || 0);
+  const cartProduct = { id: productId, name, basePrice: price, stock: availableStock };
   const showToast = (message, type = "success") => {
     setToast({ visible: true, message, type });
     window.clearTimeout(showToast.timer);
@@ -54,6 +53,11 @@ export default function ProductInfo({
   const handleBuyNow = async () => {
     if (!productId || buying) return;
 
+    if (availableStock <= 0) {
+      showToast("This item is out of stock", "error");
+      return;
+    }
+
     if (user && !isBuyerRole(user.role)) {
       await showModal({
         title: "Buyer access required",
@@ -64,22 +68,7 @@ export default function ProductInfo({
 
     setBuying(true);
     try {
-      const response = await fetch("/api/cart", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          productId,
-          quantity,
-          unitPrice: price,
-          currency: "USD",
-          color: activeColor,
-          size: selectedSize,
-        }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || "Unable to add product to cart");
-      window.dispatchEvent(new CustomEvent("cart:updated"));
+      await addProductToCart({ product: cartProduct, user, refreshCartCount, quantity });
 
       const checkoutParams = new URLSearchParams({
         productId: String(productId),
@@ -101,6 +90,11 @@ export default function ProductInfo({
   const handleAddToCart = async () => {
     if (!productId || addingToCart) return;
 
+    if (availableStock <= 0) {
+      showToast("This item is out of stock", "error");
+      return;
+    }
+
     if (user && !isBuyerRole(user.role)) {
       await showModal({
         title: "Buyer access required",
@@ -111,24 +105,8 @@ export default function ProductInfo({
 
     setAddingToCart(true);
     try {
-      const response = await fetch("/api/cart", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          productId,
-          quantity,
-          unitPrice: price,
-          currency: "USD",
-          color: activeColor,
-          size: selectedSize,
-        }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || "Unable to add product to cart");
-
-      window.dispatchEvent(new CustomEvent("cart:updated"));
-      showToast(`${name} • ${selectedVariantText || "No variant selected"}`);
+      const result = await addProductToCart({ product: cartProduct, user, refreshCartCount, quantity });
+      showToast(result.message, result.isLowStock ? "warning" : "success");
     } catch (error) {
       showToast(error.message || "Unable to add to cart", "error");
     } finally {
@@ -172,16 +150,18 @@ export default function ProductInfo({
           className={`fixed right-6 top-24 z-[80] max-w-sm rounded-xl border px-4 py-3 text-sm font-medium shadow-[0_20px_40px_rgba(15,23,42,0.16)] backdrop-blur-sm transition-all duration-300 ease-out ${
             toast.type === "error"
               ? "border-red-200 bg-red-50 text-red-700"
+              : toast.type === "warning"
+                ? "border-amber-200 bg-amber-50 text-amber-800"
               : "border-emerald-200 bg-emerald-50 text-emerald-700"
           } animate-[slideInRight_0.28s_ease-out]`}
         >
           <div className="flex items-start gap-3">
-            <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${toast.type === "error" ? "bg-red-100 text-red-600" : "bg-emerald-100 text-emerald-600"}`}>
+            <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${toast.type === "error" ? "bg-red-100 text-red-600" : toast.type === "warning" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-600"}`}>
               <ShoppingCart className="h-3.5 w-3.5" />
             </div>
             <div className="flex-1">
               <div className="flex items-center justify-between gap-3">
-                <span className="font-semibold">{toast.type === "error" ? "Cart error" : "Added to cart"}</span>
+                <span className="font-semibold">{toast.type === "error" ? "Cart error" : toast.type === "warning" ? "Stock running low" : "Added to cart"}</span>
                 <button
                   type="button"
                   onClick={hideToast}
@@ -213,8 +193,8 @@ export default function ProductInfo({
           </div>
           <span className="text-black/50">({reviewCount} Reviews)</span>
           <span className="h-4 w-px bg-black/30" />
-          <span className={inStock ? "text-[#00FF66]" : "text-red-500"}>
-            {inStock ? "In Stock" : "Out of Stock"}
+            <span className={availableStock > 0 ? "text-[#00FF66]" : "text-red-500"}>
+            {availableStock > 0 ? "In Stock" : "Out of Stock"}
           </span>
         </div>
 
@@ -273,7 +253,8 @@ export default function ProductInfo({
             <button
               type="button"
               onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-              className="flex h-full w-10 items-center justify-center text-xl font-medium hover:bg-[#DB4444] hover:text-white"
+              disabled={quantity <= 1}
+              className="flex h-full w-10 items-center justify-center text-xl font-medium hover:bg-[#DB4444] hover:text-white disabled:cursor-not-allowed disabled:text-neutral-300"
             >
               −
             </button>
@@ -282,18 +263,21 @@ export default function ProductInfo({
             </span>
             <button
               type="button"
-              onClick={() => setQuantity((q) => q + 1)}
-              className="flex h-full w-10 items-center justify-center text-xl font-medium hover:bg-[#DB4444] hover:text-white"
+              onClick={() => setQuantity((q) => Math.min(availableStock, q + 1))}
+              disabled={quantity >= availableStock}
+              className="flex h-full w-10 items-center justify-center text-xl font-medium hover:bg-[#DB4444] hover:text-white disabled:cursor-not-allowed disabled:text-neutral-300"
             >
               +
             </button>
           </div>
+          {quantity >= availableStock && availableStock > 0 && <p className="text-xs text-amber-700">Only {availableStock} available.</p>}
 
           <button
             type="button"
             onClick={handleBuyNow}
-            disabled={!inStock || isRestrictedBuyerRole || buying}
-            className="h-10 flex-1 rounded bg-[#DB4444] text-sm font-medium text-white transition-colors hover:bg-[#c33b3b] disabled:cursor-not-allowed disabled:bg-slate-400 disabled:opacity-80"
+            disabled={isRestrictedBuyerRole || buying}
+            aria-disabled={availableStock <= 0}
+            className={`h-10 flex-1 rounded text-sm font-medium text-white transition-colors disabled:cursor-not-allowed disabled:bg-slate-400 disabled:opacity-80 ${availableStock <= 0 ? "cursor-not-allowed bg-neutral-400" : "bg-[#DB4444] hover:bg-[#c33b3b]"}`}
           >
             {buying ? "Adding..." : "Buy Now"}
           </button>
@@ -302,8 +286,9 @@ export default function ProductInfo({
             type="button"
             aria-label="Add to cart"
             onClick={handleAddToCart}
-            disabled={!inStock || isRestrictedBuyerRole || addingToCart}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded border border-black/50 bg-white text-black transition-colors hover:border-[#DB4444] hover:text-[#DB4444] disabled:cursor-not-allowed disabled:opacity-40"
+            disabled={isRestrictedBuyerRole || addingToCart}
+            aria-disabled={availableStock <= 0}
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded border transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${availableStock <= 0 ? "cursor-not-allowed border-neutral-300 bg-neutral-100 text-neutral-400" : "border-black/50 bg-white text-black hover:border-[#DB4444] hover:text-[#DB4444]"}`}
           >
             <ShoppingCart className="h-4 w-4" />
           </button>

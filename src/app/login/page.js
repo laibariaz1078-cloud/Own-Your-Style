@@ -161,7 +161,7 @@ export default function LoginPage() {
         seller: "/dashboard/seller",
         vendor: "/dashboard/vendor",
         buyer: "/",
-        customer: "/",
+        
       }[role] || "/";
 
       setStatus({

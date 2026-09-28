@@ -15,7 +15,7 @@ export default function SectionHeader({
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center gap-4">
-        <span className="h-10 w-5 rounded bg-brand" />
+        <span className="" />
         <span className="text-sm font-semibold text-brand">{eyebrow}</span>
       </div>
 

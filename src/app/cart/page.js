@@ -11,6 +11,7 @@ import CartTotal from "../../components/CartTotal";
 import { getProductImage } from "../../lib/productImage";
 import { getBuyerOnlyMessage, isBuyerRole } from "../../lib/permissions";
 import { showModal } from "../../lib/modal";
+import { clampCartQuantity, getCartQuantityLimit, getProductStock } from "../../lib/cartHelpers";
 
 export default function CartPage() {
   const [cart, setCart] = useState(null);
@@ -53,7 +54,9 @@ export default function CartPage() {
   }, [router]);
 
   const updateQuantity = async (id, quantity) => {
-    const response = await fetch("/api/cart", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ productId: id, quantity }) });
+    const item = cartItems.find((cartItem) => String(cartItem.id) === String(id));
+    const safeQuantity = clampCartQuantity(quantity, item?.stockLimit ?? quantity);
+    const response = await fetch("/api/cart", { method: "PUT", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ productId: id, quantity: safeQuantity }) });
     const data = await response.json();
     if (!response.ok) throw new Error(data.message || "Unable to update quantity");
     setCart(data.cart);
@@ -74,6 +77,8 @@ export default function CartPage() {
     image: getProductImage(item.productId),
     price: Number(item.unitPrice?.$numberDecimal || item.unitPrice || item.productId?.basePrice || 0),
     quantity: item.quantity,
+    availableStock: getProductStock(item.productId),
+    stockLimit: getCartQuantityLimit(item.productId, item.quantity),
   }));
   const subtotal = cartItems.reduce(
     (sum, item) => sum + item.price * item.quantity,
@@ -89,7 +94,7 @@ export default function CartPage() {
 
       <main className="mx-auto flex max-w-7xl flex-col gap-20 px-4 py-10 pb-20 sm:px-6 lg:px-20">
         {error && <p className="rounded border border-red-200 bg-red-50 p-4 text-sm text-red-600">{error}</p>}
-        {!cart && !error ? <p>Loading cart...</p> : cartItems.length === 0 ? <p className="rounded border border-dashed border-black/20 p-8">Your cart is empty.</p> : <CartTable items={cartItems} onRemoveItem={(id) => removeItem(id).catch((removeError) => setError(removeError.message))} onUpdateQuantity={(id, quantity) => updateQuantity(id, quantity).catch((updateError) => setError(updateError.message))} />}
+        {!cart && !error ? <p>Loading cart...</p> : cartItems.length === 0 ? <p className="rounded border border-dashed border-black/20 p-8">Your cart is empty.</p> : <CartTable items={cartItems} onRemoveItem={(id) => removeItem(id).catch((removeError) => setError(removeError.message))} onUpdateQuantity={(id, quantity) => updateQuantity(id, quantity).catch((updateError) => { setError(updateError.message); throw updateError; })} />}
 
         <div className="flex flex-col items-start justify-between gap-8 lg:flex-row">
           <div className="flex w-full max-w-md items-center gap-4">

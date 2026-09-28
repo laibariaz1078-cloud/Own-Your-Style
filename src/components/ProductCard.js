@@ -9,6 +9,7 @@ import { getProductImage } from "../lib/productImage";
 import { useAppContext } from "../context/AppContext";
 import { isBuyerRole, getBuyerOnlyMessage } from "../lib/permissions";
 import { showModal } from "../lib/modal";
+import { addProductToCart as addCartItem, getProductStock } from "../lib/cartHelpers";
 
 const makeSlug = (value) =>
   String(value || "product")
@@ -44,6 +45,7 @@ export default function ProductCard({ product, onWishlistChange }) {
   const [wishlistMessage, setWishlistMessage] = useState("");
   const [wishlistPending, setWishlistPending] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
+  const [toastType, setToastType] = useState("success");
   const toastTimerRef = useRef(null);
   const router = useRouter();
   const { refreshCartCount, wishlistIds, toggleWishlistItem, user } = useAppContext();
@@ -54,6 +56,8 @@ export default function ProductCard({ product, onWishlistChange }) {
 
   const productSlug = slug || makeSlug(name);
   const image = getProductImage({ ...product, image: productImage, images });
+  const stock = getProductStock(product);
+  const isOutOfStock = stock === 0;
   const validImageSrc =
     image &&
     (image.startsWith("http://") ||
@@ -69,8 +73,9 @@ export default function ProductCard({ product, onWishlistChange }) {
     if (callback) callback();
   };
 
-  const showToast = (message, duration = 1800) => {
+  const showToast = (message, duration = 1800, type = "success") => {
     setToastMessage(message);
+    setToastType(type);
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     toastTimerRef.current = setTimeout(() => setToastMessage(""), duration);
   };
@@ -119,6 +124,11 @@ export default function ProductCard({ product, onWishlistChange }) {
   };
 
   const addProductToCart = async () => {
+    if (isOutOfStock) {
+      showToast("This item is out of stock", 2400, "error");
+      return;
+    }
+
     if (user && !isBuyerRole(user.role)) {
       await showModal({
         title: "Buyer access required",
@@ -131,39 +141,13 @@ export default function ProductCard({ product, onWishlistChange }) {
     setCartMessage("Adding...");
 
     try {
-      if (!user) {
-        const guestItems = JSON.parse(localStorage.getItem("guest_cart_items") || "[]");
-        const existingItem = guestItems.find((item) => String(item.productId) === String(productId));
-        const nextItems = existingItem
-          ? guestItems.map((item) => String(item.productId) === String(productId)
-              ? { ...item, quantity: Number(item.quantity || 0) + 1 }
-              : item)
-          : [...guestItems, { productId: String(productId), quantity: 1 }];
-
-        localStorage.setItem("guest_cart_items", JSON.stringify(nextItems));
-        window.dispatchEvent(new CustomEvent("cart:updated"));
-        await refreshCartCount();
-        setCartMessage("Added");
-        showToast("Added to cart");
-        setTimeout(() => setCartMessage(""), 1800);
-        return;
-      }
-
-      const response = await fetch("/api/cart", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productId, quantity: 1, unitPrice: product.basePrice ?? price }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || "Unable to add to cart");
-      window.dispatchEvent(new CustomEvent("cart:updated"));
-      await refreshCartCount();
+      const result = await addCartItem({ product, user, refreshCartCount });
       setCartMessage("Added");
-      showToast("Added to cart");
+      showToast(result.message, 2400, result.isLowStock ? "warning" : "success");
       setTimeout(() => setCartMessage(""), 1800);
     } catch (error) {
-      setCartMessage(error.message);
+      setCartMessage(error.message || "Unable to add to cart");
+      showToast(error.message || "Unable to add to cart", 2400, "error");
       setTimeout(() => setCartMessage(""), 2500);
     } finally {
       setCartPending(false);
@@ -234,11 +218,12 @@ export default function ProductCard({ product, onWishlistChange }) {
             <button
               type="button"
               onClick={(e) => handleActionClick(e, addProductToCart)}
-              disabled={isRestrictedBuyerRole || cartPending}
-              className="absolute inset-x-0 bottom-0 z-20 flex h-9 w-full items-center justify-center bg-black text-xs font-medium text-white opacity-0 transition-opacity duration-300 group-hover:opacity-100 disabled:cursor-not-allowed disabled:bg-slate-400 disabled:opacity-100"
+              disabled={cartPending || (isRestrictedBuyerRole && !isOutOfStock)}
+              aria-disabled={isOutOfStock}
+              className={`absolute inset-x-0 bottom-0 z-20 flex h-9 w-full items-center justify-center text-xs font-medium transition-opacity duration-300 disabled:cursor-not-allowed disabled:bg-slate-400 disabled:opacity-100 ${isOutOfStock ? "cursor-not-allowed bg-neutral-400 text-white opacity-100" : "bg-black text-white opacity-0 group-hover:opacity-100"}`}
             >
               <ShoppingCart className="h-4 w-4 mr-1" />
-              {cartPending ? "Adding..." : cartMessage || "Add To Cart"}
+              {isOutOfStock ? "Out of Stock" : cartPending ? "Adding..." : cartMessage || "Add To Cart"}
             </button>
           )}
 
@@ -253,7 +238,7 @@ export default function ProductCard({ product, onWishlistChange }) {
       </Link>
 
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-[60] rounded-lg bg-[#DB4444] px-4 py-2 text-sm font-medium text-white shadow-lg">
+        <div className={`fixed bottom-6 right-6 z-[60] rounded-lg px-4 py-2 text-sm font-medium text-white shadow-lg ${toastType === "warning" ? "bg-amber-500" : toastType === "error" ? "bg-red-600" : "bg-[#DB4444]"}`} role="status">
           {toastMessage}
         </div>
       )}
