@@ -45,6 +45,7 @@ const fallbackCatalog = Object.entries(fallbackProductsByCategory)
   })));
 
 const PAGE_SIZE = 12;
+const DESKTOP_BREAKPOINT = 1024;
 
 const normalizeCategoryMatchValue = (value) =>
   String(value || "")
@@ -95,8 +96,19 @@ export default function ShopPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+
+  // Set correct sidebar default based on screen size, and keep it in sync on resize
+  useEffect(() => {
+    const applyResponsiveSidebar = () => {
+      setSidebarOpen(window.innerWidth >= DESKTOP_BREAKPOINT);
+    };
+
+    applyResponsiveSidebar();
+    window.addEventListener("resize", applyResponsiveSidebar);
+    return () => window.removeEventListener("resize", applyResponsiveSidebar);
+  }, []);
 
   useEffect(() => {
     const categoryFromUrl = new URLSearchParams(window.location.search).get("category");
@@ -132,9 +144,16 @@ export default function ShopPage() {
   const visibleProducts = allProducts.slice(0, visibleCount);
   const hasMore = visibleCount < totalCount;
 
+  const handleSelectCategory = (category) => {
+    setSelectedCategory(category);
+    if (window.innerWidth < DESKTOP_BREAKPOINT) {
+      setSidebarOpen(false);
+    }
+  };
+
   const gridColsClass = sidebarOpen
-    ? "grid-cols-2 sm:grid-cols-2 lg:grid-cols-3"
-    : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4";
+    ? "grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3"
+    : "grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4";
 
   return (
     <>
@@ -143,8 +162,8 @@ export default function ShopPage() {
 
       <Breadcrumb items={[{ label: "Home", href: "/" }, { label: "Shop" }]} />
 
-      <main className="page-shell flex flex-col gap-14 pb-20">
-        <div className="flex flex-col gap-1 border-b border-black/10 pb-6 sm:flex-row sm:items-center sm:justify-between">
+      <main className="page-shell flex flex-col gap-8 pb-16 sm:gap-14 sm:pb-20">
+        <div className="flex flex-col gap-3 border-b border-black/10 pb-6 sm:flex-row sm:items-center sm:justify-between sm:gap-1">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen((previous) => !previous)}
@@ -154,8 +173,8 @@ export default function ShopPage() {
               {sidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
             </button>
             <div>
-              <h1 className="text-3xl font-semibold leading-tight text-black">Shop</h1>
-              <p className="mt-1 text-sm text-gray-500">
+              <h1 className="text-2xl font-semibold leading-tight text-black sm:text-3xl">Shop</h1>
+              <p className="mt-1 text-xs text-gray-500 sm:text-sm">
                 {loading
                   ? "Loading products..."
                   : searchTerm
@@ -174,17 +193,39 @@ export default function ShopPage() {
           )}
         </div>
 
-        <section className="flex flex-col gap-10 lg:flex-row lg:gap-8">
+        <section className="flex flex-col gap-6 lg:flex-row lg:gap-8">
           {sidebarOpen && (
-            <CategorySidebar
-              selectedCategory={selectedCategory}
-              onSelectCategory={setSelectedCategory}
-            />
+            <>
+              {/* Mobile/tablet backdrop overlay - closes sidebar on outside click */}
+              <div
+                className="fixed inset-0 z-40 bg-black/30 lg:hidden"
+                onClick={() => setSidebarOpen(false)}
+                aria-hidden="true"
+              />
+
+              {/* Sidebar: fixed drawer on mobile/tablet, static column on desktop */}
+              <div className="fixed inset-y-0 left-0 z-50 w-72 max-w-[80vw] overflow-y-auto bg-white p-4 shadow-lg lg:static lg:z-auto lg:w-auto lg:max-w-none lg:overflow-visible lg:bg-transparent lg:p-0 lg:shadow-none">
+                <div className="mb-4 flex items-center justify-between lg:hidden">
+                  <span className="text-sm font-semibold text-black">Categories</span>
+                  <button
+                    onClick={() => setSidebarOpen(false)}
+                    className="flex h-8 w-8 items-center justify-center rounded border border-black/10 text-gray-600"
+                    aria-label="Close categories"
+                  >
+                    <PanelLeftClose size={16} />
+                  </button>
+                </div>
+                <CategorySidebar
+                  selectedCategory={selectedCategory}
+                  onSelectCategory={handleSelectCategory}
+                />
+              </div>
+            </>
           )}
 
-          <div className="min-w-0 flex-1 space-y-10">
+          <div className="min-w-0 flex-1 space-y-8 sm:space-y-10">
             {loading && (
-              <div className={`grid gap-6 ${gridColsClass}`}>
+              <div className={`grid gap-4 sm:gap-6 ${gridColsClass}`}>
                 {Array.from({ length: 8 }).map((_, index) => (
                   <div key={index} className="aspect-[3/4] animate-pulse rounded bg-gray-100" />
                 ))}
@@ -192,7 +233,7 @@ export default function ShopPage() {
             )}
 
             {!loading && totalCount === 0 && (
-              <div className="flex flex-col items-center gap-2 rounded border border-dashed border-gray-200 bg-gray-50 px-6 py-16 text-center">
+              <div className="flex flex-col items-center gap-2 rounded border border-dashed border-gray-200 bg-gray-50 px-4 py-12 text-center sm:px-6 sm:py-16">
                 <p className="text-base font-medium text-black">No products found</p>
                 <p className="text-sm text-gray-500">
                   Try a different category or clear your search to see everything in stock.
@@ -201,22 +242,22 @@ export default function ShopPage() {
             )}
 
             {!loading && totalCount > 0 && (
-              <section className="flex flex-col gap-8">
+              <section className="flex flex-col gap-6 sm:gap-8">
                 <div className="flex flex-col gap-4">
                   <SectionBadge label="Browse" />
                   <SectionHeader title="All Products" />
                 </div>
-                <div className={`grid gap-x-6 gap-y-10 ${gridColsClass}`}>
+                <div className={`grid gap-x-4 gap-y-8 sm:gap-x-6 sm:gap-y-10 ${gridColsClass}`}>
                   {visibleProducts.map((product) => (
                     <ProductCard key={product.id} product={product} />
                   ))}
                 </div>
 
                 {hasMore && (
-                  <div className="flex justify-center pt-6">
+                  <div className="flex justify-center pt-4 sm:pt-6">
                     <button
                       onClick={() => setVisibleCount((previous) => previous + PAGE_SIZE)}
-                      className="rounded bg-[#DB4444] px-12 py-3 text-sm font-medium text-white transition hover:bg-[#c93b3b]"
+                      className="rounded bg-[#DB4444] px-8 py-3 text-sm font-medium text-white transition hover:bg-[#c93b3b] sm:px-12"
                     >
                       Load More
                     </button>

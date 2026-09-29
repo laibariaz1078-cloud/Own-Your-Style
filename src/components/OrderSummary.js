@@ -18,6 +18,7 @@ export default function OrderSummary({ items = [], billingDetails = {} }) {
     try {
       const response = await fetch("/api/stripe/checkout-session", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ billingDetails }),
       });

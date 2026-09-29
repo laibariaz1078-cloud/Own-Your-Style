@@ -53,6 +53,14 @@ export async function POST(request) {
     const sameUserByEmail = Boolean(currentUserEmail && sessionUserEmails.includes(currentUserEmail));
 
     if (currentUser && (!sessionUserId && !sessionUserEmails.length || !sameUserById && !sameUserByEmail)) {
+      console.warn("Stripe checkout ownership mismatch", {
+        checkoutSessionId: session.id,
+        currentUserIdMatches: sameUserById,
+        currentUserEmailMatches: sameUserByEmail,
+        hasSessionUserId: Boolean(sessionUserId),
+        sessionEmailCount: sessionUserEmails.length,
+        requestHost: request.headers.get("host"),
+      });
       return NextResponse.json({ success: false, message: "This payment does not belong to your account." }, { status: 403 });
     }
 
