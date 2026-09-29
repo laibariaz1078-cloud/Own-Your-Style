@@ -21,6 +21,7 @@ import {
   ClipboardCheck,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useAppContext } from "../../context/AppContext";
 
 const menuConfig = {
   admin: [
@@ -63,6 +64,7 @@ export default function DashboardSidebar() {
   const router = useRouter();
   const [userRole, setUserRole] = useState(null);
   const [isOpen, setIsOpen] = useState(false);
+  const { logout } = useAppContext();
 
   useEffect(() => {
     const fetchUserRole = async () => {
@@ -97,7 +99,7 @@ export default function DashboardSidebar() {
 
   const handleLogout = async () => {
     try {
-      await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+      await logout();
       router.push("/login");
     } catch (err) {
       console.error("Logout failed", err);

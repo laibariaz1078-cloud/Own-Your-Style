@@ -21,7 +21,7 @@ export default function Navbar({ searchValue = "", onSearchChange }) {
   const pathname = usePathname();
   const router = useRouter();
   const menuRef = useRef(null);
-  const { isAuthenticated, user, cartCount, wishlistCount, logout } = useAppContext();
+  const { isAuthenticated, user, cartCount, wishlistCount, refreshSession, logout } = useAppContext();
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -49,6 +49,13 @@ export default function Navbar({ searchValue = "", onSearchChange }) {
     } catch (error) {
       console.error("Logout failed", error);
     }
+  };
+
+  const handleProtectedNavigation = async (event, destination) => {
+    if (isAuthenticated) return;
+    event.preventDefault();
+    const authenticated = await refreshSession();
+    router.push(authenticated ? destination : `/login?returnTo=${encodeURIComponent(destination)}`);
   };
 
   return (
@@ -91,13 +98,13 @@ export default function Navbar({ searchValue = "", onSearchChange }) {
           </div>
 
           {/* Action Icons */}
-          <Link href="/wishlist" aria-label="Wishlist" className="relative transition-opacity hover:opacity-80">
+          <Link href="/wishlist" onClick={(event) => handleProtectedNavigation(event, "/wishlist")} aria-label="Wishlist" className="relative transition-opacity hover:opacity-80">
             <Heart className="h-6 w-6 fill-transparent text-black transition-colors duration-200 hover:fill-red-500 hover:text-red-500" />
             <span className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#DB4444] px-1 text-[10px] font-semibold text-white">
               {wishlistCount > 99 ? "99+" : wishlistCount}
             </span>
           </Link>
-          <Link href="/cart" aria-label="Cart" className="relative transition-opacity hover:opacity-80">
+          <Link href="/cart" prefetch={false} onClick={(event) => handleProtectedNavigation(event, "/cart")} aria-label="Cart" className="relative transition-opacity hover:opacity-80">
             <ShoppingCart className="h-6 w-6 text-black transition-colors duration-200 hover:text-red-500" />
             <span className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#DB4444] px-1 text-[10px] font-semibold text-white">
               {cartCount > 99 ? "99+" : cartCount}

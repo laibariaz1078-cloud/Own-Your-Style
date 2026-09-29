@@ -7,8 +7,7 @@ import WishlistGrid from "../../components/WishlistGrid";
 import ProductCard from "../../components/ProductCard";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { useAppContext } from "../../context/AppContext";
-import { flashSaleProducts, bestSellingProducts, exploreProducts } from "../home-data";
+import { useAppContext, useAuthGuard } from "../../context/AppContext";
 import { getBuyerOnlyMessage, isBuyerRole } from "../../lib/permissions";
 import { showModal } from "../../lib/modal";
 import { LoaderCircle, ShoppingBag } from "lucide-react";
@@ -23,69 +22,22 @@ export default function WishlistPage() {
   const [addedProductIds, setAddedProductIds] = useState([]);
   const [isAddingAll, setIsAddingAll] = useState(false);
   const router = useRouter();
+  const isCheckingAuth = useAuthGuard();
   const { refreshCartCount, refreshWishlistItems, user } = useAppContext();
   const isRestrictedBuyerRole = !!user && !isBuyerRole(user.role);
 
-  const getGuestWishlistIds = () => {
-    if (typeof window === "undefined") return [];
-
-    try {
-      const stored = localStorage.getItem("guest_wishlist_ids");
-      if (!stored) return [];
-      const parsed = JSON.parse(stored);
-      return Array.isArray(parsed) ? parsed.map(String) : [];
-    } catch {
-      return [];
-    }
-  };
-
   const loadWishlistItems = useCallback(async () => {
     try {
-      if (!user) {
-        const ids = getGuestWishlistIds();
-        if (!ids.length) {
-          setWishlistItems([]);
-          return;
-        }
-
-        const response = await fetch("/api/products?limit=100");
-        const data = await response.json();
-        const products = Array.isArray(data?.products) ? data.products : [];
-        const catalog = [...flashSaleProducts, ...bestSellingProducts, ...exploreProducts];
-        const productSources = [...products, ...catalog];
-        const mappedItems = ids
-          .map((id) => productSources.find((product) => String(product._id || product.id) === id))
-          .filter(Boolean)
-          .map((product) => ({
-            ...product,
-            id: String(product._id || product.id),
-            image: product.image || product.images?.[0]?.url || "",
-            price: product.basePrice ?? product.price ?? 0,
-          }));
-
-        setWishlistItems(mappedItems);
-        return;
-      }
-
       const response = await fetch("/api/wishlist", { credentials: "include" });
       const data = await response.json();
       setWishlistItems(data.success ? data.wishlist : []);
     } catch (error) {
       setWishlistItems([]);
     }
-  }, [user]);
+  }, []);
 
   const handleRemoveWishlistItem = async (productId) => {
     try {
-      if (!user) {
-        const ids = getGuestWishlistIds();
-        const nextIds = ids.filter((id) => String(id) !== String(productId));
-        localStorage.setItem("guest_wishlist_ids", JSON.stringify(nextIds));
-        setWishlistItems((prevItems) => prevItems.filter((item) => String(item.id) !== String(productId)));
-        window.dispatchEvent(new CustomEvent("wishlist:updated"));
-        return;
-      }
-
       const response = await fetch(`/api/wishlist?productId=${productId}`, {
         method: "DELETE",
         credentials: "include",
@@ -185,6 +137,8 @@ export default function WishlistPage() {
   };
 
   useEffect(() => {
+    if (isCheckingAuth) return;
+
     const syncWishlist = () => {
       void loadWishlistItems();
     };
@@ -204,7 +158,11 @@ export default function WishlistPage() {
       window.clearTimeout(timer);
       window.removeEventListener("wishlist:updated", syncWishlist);
     };
-  }, [loadWishlistItems]);
+  }, [isCheckingAuth, loadWishlistItems]);
+
+  if (isCheckingAuth) {
+    return <main className="flex min-h-screen items-center justify-center text-sm text-neutral-500">Loading wishlist...</main>;
+  }
 
   return (
     <div className="min-h-screen bg-white font-sans text-black">

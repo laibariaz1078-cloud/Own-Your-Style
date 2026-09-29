@@ -42,3 +42,8 @@ export async function removeFromWishlist({ userId, productId }) {
     { new: true }
   );
 }
+
+export async function clearUserWishlist(userId) {
+  await connectToDatabase();
+  await Wishlist.deleteOne({ userId });
+}

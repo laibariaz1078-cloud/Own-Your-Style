@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import TopBar from "../../components/TopBar";
 import Navbar from "../../components/Navbar";
@@ -12,22 +12,26 @@ import { getProductImage } from "../../lib/productImage";
 import { getBuyerOnlyMessage, isBuyerRole } from "../../lib/permissions";
 import { showModal } from "../../lib/modal";
 import { clampCartQuantity, getCartQuantityLimit, getProductStock } from "../../lib/cartHelpers";
+import { useAuthGuard } from "../../context/AppContext";
 
 export default function CartPage() {
   const [cart, setCart] = useState(null);
   const [error, setError] = useState("");
   const router = useRouter();
-  const loadCart = async () => {
+  const isCheckingAuth = useAuthGuard();
+  const loadCart = useCallback(async () => {
     const response = await fetch("/api/cart");
     const data = await response.json();
     if (!response.ok) throw new Error(data.message || "Unable to load cart");
     setCart(data.cart);
-  };
+  }, []);
 
   useEffect(() => {
-    const timer = setTimeout(async () => {
+    if (isCheckingAuth) return;
+
+    const loadAuthorizedCart = async () => {
       try {
-        const authResponse = await fetch("/api/auth/me", { credentials: "include" });
+        const authResponse = await fetch("/api/auth/me", { credentials: "include", cache: "no-store" });
         const authData = await authResponse.json();
 
         if (!authResponse.ok || !authData?.success || !authData.user) {
@@ -48,10 +52,10 @@ export default function CartPage() {
       } catch (loadError) {
         setError(loadError.message || "Unable to load cart");
       }
-    }, 0);
+    };
 
-    return () => clearTimeout(timer);
-  }, [router]);
+    void loadAuthorizedCart();
+  }, [isCheckingAuth, loadCart, router]);
 
   const updateQuantity = async (id, quantity) => {
     const item = cartItems.find((cartItem) => String(cartItem.id) === String(id));
@@ -84,6 +88,10 @@ export default function CartPage() {
     (sum, item) => sum + item.price * item.quantity,
     0
   );
+
+  if (isCheckingAuth) {
+    return <main className="flex min-h-screen items-center justify-center text-sm text-neutral-500">Loading cart...</main>;
+  }
 
   return (
     <div className="min-h-screen bg-white font-sans text-black">

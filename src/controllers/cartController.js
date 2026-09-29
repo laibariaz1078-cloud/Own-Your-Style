@@ -128,3 +128,14 @@ export async function removeFromCart({ userId, sessionId, productId }) {
 
   return updatedCart?.populate("items.productId", "name basePrice images sellerId variants status");
 }
+
+export async function clearUserCart(userId) {
+  await connectToDatabase();
+  const cart = await Cart.findOne({ userId }).lean();
+
+  if (cart?.items?.length) {
+    await Promise.all(cart.items.map((item) => releaseStock(item.productId, item.quantity)));
+  }
+
+  await Cart.deleteOne({ userId });
+}

@@ -8,6 +8,7 @@ import TopBar from "../../components/TopBar";
 import AuthLayout from "../../components/AuthLayout";
 import StatusModal from "../../components/StatusModal";
 import { hasValidRecaptchaConfig } from "../../lib/recaptcha";
+import { useAppContext } from "../../context/AppContext";
 
 const EyeIcon = ({ open }) => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
@@ -36,6 +37,7 @@ const EyeIcon = ({ open }) => (
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { refreshSession } = useAppContext();
   const [form, setForm] = useState({ identifier: "", password: "" });
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -153,6 +155,10 @@ export default function LoginPage() {
 
       if (!response.ok || !data.success) {
         throw new Error(data.error || data.message || "Login failed.");
+      }
+
+      if (!(await refreshSession())) {
+        throw new Error("Your login could not be verified. Please try again.");
       }
 
       const role = data.user?.role || "buyer";

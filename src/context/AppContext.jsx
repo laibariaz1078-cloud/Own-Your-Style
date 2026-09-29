@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 
 const AppContext = createContext(null);
 const GUEST_CART_KEY = "guest_cart_items";
@@ -53,7 +54,7 @@ export function AppProvider({ children }) {
     if (typeof window === "undefined") return false;
 
     try {
-      const response = await fetch("/api/auth/me", { credentials: "include" });
+      const response = await fetch("/api/auth/me", { credentials: "include", cache: "no-store" });
 
       if (response.status === 401) {
         setIsAuthenticated(false);
@@ -80,8 +81,8 @@ export function AppProvider({ children }) {
     }
   }, []);
 
-  const refreshCartCount = useCallback(async () => {
-    if (!isAuthenticated) {
+  const refreshCartCount = useCallback(async (authenticated = isAuthenticated) => {
+    if (!authenticated) {
       const guestItems = readGuestCartItems();
       const totalItems = guestItems.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0);
       setCartCount(totalItems);
@@ -107,8 +108,8 @@ export function AppProvider({ children }) {
     }
   }, [isAuthenticated]);
 
-  const refreshWishlistItems = useCallback(async () => {
-    if (!isAuthenticated) {
+  const refreshWishlistItems = useCallback(async (authenticated = isAuthenticated) => {
+    if (!authenticated) {
       const ids = readGuestWishlistIds();
       setWishlistIds(ids);
       setWishlistCount(ids.length);
@@ -200,23 +201,41 @@ export function AppProvider({ children }) {
   }, [isAuthenticated, refreshWishlistItems]);
 
   const refreshAll = useCallback(async () => {
-    await Promise.all([refreshSession(), refreshCartCount(), refreshWishlistItems()]);
+    const authenticated = await refreshSession();
+    await Promise.all([refreshCartCount(authenticated), refreshWishlistItems(authenticated)]);
   }, [refreshSession, refreshCartCount, refreshWishlistItems]);
 
+  const clearUserData = useCallback(() => {
+    if (typeof window !== "undefined") {
+      try {
+        for (const storage of [window.localStorage, window.sessionStorage]) {
+          storage.removeItem(GUEST_CART_KEY);
+          storage.removeItem(GUEST_WISHLIST_KEY);
+        }
+      } catch (error) {
+        console.error("Unable to clear stored user data", error);
+      }
+    }
+
+    setIsAuthenticated(false);
+    setUser(null);
+    setCartCount(0);
+    setWishlistIds([]);
+    setWishlistCount(0);
+  }, []);
+
   const logout = useCallback(async () => {
+    const logoutRequest = fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+    clearUserData();
+
     try {
-      await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+      await logoutRequest;
     } catch (error) {
       console.error("Logout failed", error);
     } finally {
-      setIsAuthenticated(false);
-      setUser(null);
-      setCartCount(readGuestCartItems().reduce((sum, item) => sum + (Number(item.quantity) || 0), 0));
-      const guestIds = readGuestWishlistIds();
-      setWishlistIds(guestIds);
-      setWishlistCount(guestIds.length);
+      clearUserData();
     }
-  }, []);
+  }, [clearUserData]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -231,11 +250,7 @@ export function AppProvider({ children }) {
   useEffect(() => {
     const handleCartUpdated = () => void refreshCartCount();
     const handleWishlistUpdated = () => void refreshWishlistItems();
-    const handleAuthUpdated = async () => {
-      await refreshSession();
-      await refreshCartCount();
-      await refreshWishlistItems();
-    };
+    const handleAuthUpdated = () => void refreshAll();
 
     window.addEventListener("cart:updated", handleCartUpdated);
     window.addEventListener("wishlist:updated", handleWishlistUpdated);
@@ -246,7 +261,7 @@ export function AppProvider({ children }) {
       window.removeEventListener("wishlist:updated", handleWishlistUpdated);
       window.removeEventListener("auth:updated", handleAuthUpdated);
     };
-  }, [refreshCartCount, refreshSession, refreshWishlistItems]);
+  }, [refreshCartCount, refreshWishlistItems, refreshAll]);
 
   const value = useMemo(
     () => ({
@@ -261,11 +276,12 @@ export function AppProvider({ children }) {
       refreshWishlistCount,
       toggleWishlistItem,
       refreshAll,
+      clearUserData,
       logout,
       setIsAuthenticated,
       setUser,
     }),
-    [isAuthenticated, user, cartCount, wishlistIds, wishlistCount, refreshSession, refreshCartCount, refreshWishlistItems, refreshWishlistCount, toggleWishlistItem, refreshAll, logout]
+    [isAuthenticated, user, cartCount, wishlistIds, wishlistCount, refreshSession, refreshCartCount, refreshWishlistItems, refreshWishlistCount, toggleWishlistItem, refreshAll, clearUserData, logout]
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
@@ -279,4 +295,33 @@ export function useAppContext() {
   }
 
   return context;
+}
+
+export function useAuthGuard() {
+  const { refreshSession } = useAppContext();
+  const pathname = usePathname();
+  const router = useRouter();
+  const [isChecking, setIsChecking] = useState(true);
+
+  useEffect(() => {
+    let isActive = true;
+
+    const checkAuthentication = async () => {
+      const authenticated = await refreshSession();
+      if (!isActive) return;
+      if (!authenticated) {
+        router.replace(`/login?returnTo=${encodeURIComponent(pathname)}`);
+        return;
+      }
+      setIsChecking(false);
+    };
+
+    void checkAuthentication();
+
+    return () => {
+      isActive = false;
+    };
+  }, [pathname, refreshSession, router]);
+
+  return isChecking;
 }

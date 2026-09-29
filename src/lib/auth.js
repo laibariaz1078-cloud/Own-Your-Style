@@ -6,8 +6,16 @@ import dbConnect from "./dbConnect";
 import User from "../models/User";
 import Session from "../models/Session";
 
-const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me";
 const COOKIE_NAME = "token";
+
+function getJwtSecret() {
+  const secret = process.env.JWT_SECRET?.trim();
+  if (secret) return secret;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("JWT_SECRET must be configured in production.");
+  }
+  return "dev-secret-change-me";
+}
 
 async function getUsableUser(user) {
   if (!user) return null;
@@ -50,12 +58,12 @@ export async function comparePassword(password, hash) {
 }
 
 export function signToken(payload) {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: "7d" });
+  return jwt.sign(payload, getJwtSecret(), { expiresIn: "7d" });
 }
 
 export function verifyToken(token) {
   try {
-    return jwt.verify(token, JWT_SECRET);
+    return jwt.verify(token, getJwtSecret());
   } catch (error) {
     return null;
   }
