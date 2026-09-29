@@ -164,7 +164,7 @@ export async function findUserByEmailOrPhone(value) {
 export async function getCurrentUser() {
   const user = await getAuthUser();
   if (!user) {
-    const error = new Error("Session expired or invalid.");
+    const error = new Error("Login to access this resource.");
     error.statusCode = 401;
     throw error;
   }
