@@ -20,7 +20,7 @@ export async function GET() {
       .filter(Boolean);
     return NextResponse.json({ success: true, wishlist: products });
   } catch (error) {
-    return NextResponse.json({ success: true, wishlist: [] }, { status: 200 });
+    return NextResponse.json({ success: false, wishlist: [], message: error.message || "Unable to load wishlist." }, { status: error.statusCode || 200 });
   }
 }
 
@@ -42,7 +42,7 @@ export async function POST(request) {
     const wishlist = await addToWishlist({ userId: user._id, productId });
     return NextResponse.json({ success: true, wishlist }, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ success: false, message: error.message || "Unable to add item to wishlist." }, { status: 200 });
+    return NextResponse.json({ success: false, message: error.message || "Unable to add item to wishlist." }, { status: error.statusCode || 200 });
   }
 }
 
@@ -57,6 +57,6 @@ export async function DELETE(request) {
     const wishlist = await removeFromWishlist({ userId: user._id, productId });
     return NextResponse.json({ success: true, wishlist });
   } catch (error) {
-    return NextResponse.json({ success: false, message: error.message || "Unable to remove item from wishlist." }, { status: 200 });
+    return NextResponse.json({ success: false, message: error.message || "Unable to remove item from wishlist." }, { status: error.statusCode || 200 });
   }
 }

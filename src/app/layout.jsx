@@ -1,6 +1,7 @@
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import ModalHost from "../components/ModalHost";
+import ToasterProvider from "../components/ToasterProvider";
 import { AppProvider } from "../context/AppContext";
 
 const geistSans = Geist({
@@ -27,6 +28,7 @@ export default function RootLayout({ children }) {
       <body className="min-h-full flex flex-col">
         <AppProvider>{children}</AppProvider>
         <ModalHost />
+        <ToasterProvider />
       </body>
     </html>
   );

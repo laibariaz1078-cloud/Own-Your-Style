@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useRef, useState } from "react";
 import TopBar from "../../components/TopBar";
 
 import AuthLayout from "../../components/AuthLayout";
+import LoginNotice from "../../components/LoginNotice";
 import StatusModal from "../../components/StatusModal";
 import { hasValidRecaptchaConfig } from "../../lib/recaptcha";
 import { useAppContext } from "../../context/AppContext";
@@ -36,7 +37,6 @@ const EyeIcon = ({ open }) => (
 
 export default function LoginPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { refreshSession } = useAppContext();
   const [form, setForm] = useState({ identifier: "", password: "" });
   const [rememberMe, setRememberMe] = useState(false);
@@ -161,15 +161,6 @@ export default function LoginPage() {
         throw new Error("Your login could not be verified. Please try again.");
       }
 
-      const role = data.user?.role || "buyer";
-      const homeRoute = {
-        admin: "/dashboard/admin",
-        seller: "/dashboard/seller",
-        vendor: "/dashboard/vendor",
-        buyer: "/",
-        
-      }[role] || "/";
-
       setStatus({
         open: true,
         type: "success",
@@ -183,10 +174,10 @@ export default function LoginPage() {
       setCaptchaToken("");
 
       setTimeout(() => {
-        const returnTo = searchParams.get("returnTo");
-        const destination = returnTo && returnTo.startsWith("/") ? returnTo : homeRoute;
+        const redirect = new URLSearchParams(window.location.search).get("redirect");
+        const destination = redirect && redirect.startsWith("/") && !redirect.startsWith("//") ? redirect : "/";
         window.dispatchEvent(new CustomEvent("auth:updated"));
-        router.push(destination);
+        router.replace(destination);
         router.refresh();
       }, 1200);
     } catch (err) {
@@ -276,6 +267,9 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-white">
+      <Suspense fallback={null}>
+        <LoginNotice />
+      </Suspense>
       <TopBar />
      
 

@@ -55,7 +55,7 @@ export default function Navbar({ searchValue = "", onSearchChange }) {
     if (isAuthenticated) return;
     event.preventDefault();
     const authenticated = await refreshSession();
-    router.push(authenticated ? destination : `/login?returnTo=${encodeURIComponent(destination)}`);
+    router.push(authenticated ? destination : `/login?redirect=${destination}&reason=auth`);
   };
 
   return (

@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import TopBar from "../../components/TopBar";
 
 import AuthLayout from "../../components/AuthLayout";
+import LoginNotice from "../../components/LoginNotice";
 import { hasValidRecaptchaConfig } from "../../lib/recaptcha";
 
 export default function SignUpPage() {
@@ -158,7 +159,9 @@ export default function SignUpPage() {
       setCaptchaToken("");
 
       window.dispatchEvent(new CustomEvent("auth:updated"));
-      router.push(role === "seller" ? "/dashboard/seller" : "/");
+      const redirect = new URLSearchParams(window.location.search).get("redirect");
+      const destination = redirect && redirect.startsWith("/") && !redirect.startsWith("//") ? redirect : "/";
+      router.replace(destination);
       router.refresh();
     } catch (err) {
       setError(err.message || "Something went wrong.");
@@ -169,6 +172,9 @@ export default function SignUpPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-white">
+      <Suspense fallback={null}>
+        <LoginNotice />
+      </Suspense>
       <TopBar />
   
 
