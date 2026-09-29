@@ -12,7 +12,7 @@ export default function LoginNotice() {
     if (searchParams.get("reason") !== "auth" || hasShownNotice.current) return;
 
     hasShownNotice.current = true;
-    toast.error("Please login or sign up to access this page");
+    toast.error("Please login or sign up to access Cart Page");
   }, [searchParams]);
 
   return null;
