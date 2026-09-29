@@ -164,7 +164,7 @@ export async function findUserByEmailOrPhone(value) {
 export async function getCurrentUser() {
   const user = await getAuthUser();
   if (!user) {
-    const error = new Error("Login to access this resource.");
+    const error = new Error("Login to use this feature.");
     error.statusCode = 401;
     throw error;
   }
